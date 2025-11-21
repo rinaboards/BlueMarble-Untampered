@@ -147,7 +147,7 @@ export default class ApiManager {
 
     console.log('Sending heartbeat to telemetry server...');
 
-    let userSettings = GM_getValue('bmUserSettings', '{}')
+    let userSettings = localStorage.getItem('BM_bmUserSettings') || '{}';
     userSettings = JSON.parse(userSettings);
 
     if (!userSettings || !userSettings.telemetry || !userSettings.uuid) {
@@ -159,26 +159,25 @@ export default class ApiManager {
     let browser = await this.#getBrowserFromUA(ua);
     let os = this.#getOS(ua);
 
-    GM_xmlhttpRequest({
+    window.originalFetch('https://telemetry.thebluecorner.net/heartbeat', {
       method: 'POST',
-      url: 'https://telemetry.thebluecorner.net/heartbeat',
       headers: {
         'Content-Type': 'application/json'
       },
-      data: JSON.stringify({
+      body: JSON.stringify({
         uuid: userSettings.uuid,
         version: version,
         browser: browser,
         os: os,
-      }),
-      onload: (response) => {
-        if (response.status !== 200) {
-          consoleError('Failed to send heartbeat:', response.statusText);
-        }
-      },
-      onerror: (error) => {
-        consoleError('Error sending heartbeat:', error);
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        consoleError('Failed to send heartbeat:', response.statusText);
       }
+    })
+    .catch(error => {
+      consoleError('Error sending heartbeat:', error);
     });
   }
 

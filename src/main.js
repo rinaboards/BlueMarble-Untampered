@@ -8,8 +8,23 @@ import ApiManager from './apiManager.js';
 import TemplateManager from './templateManager.js';
 import { consoleLog, consoleWarn, selectAllCoordinateInputs } from './utils.js';
 
-const name = GM_info.script.name.toString(); // Name of userscript
-const version = GM_info.script.version.toString(); // Version of userscript
+// Metadata bundled from BlueMarble.meta.js
+window.BM_meta = {
+  name: "Blue Marble",
+  namespace: "https://github.com/SwingTheVine/",
+  version: "0.86.0",
+  description: "A userscript to automate and/or enhance the user experience on Wplace.live. Make sure to comply with the site's Terms of Service, and rules! This script is not affiliated with Wplace.live in any way, use at your own risk. This script is not affiliated with TamperMonkey. The author of this userscript is not responsible for any damages, issues, loss of data, or punishment that may occur as a result of using this script. This script is provided 'as is' under the MPL-2.0 license. The 'Blue Marble' icon is licensed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. The image is owned by NASA.",
+  author: "SwingTheVine",
+  license: "MPL-2.0",
+  supportURL: "https://discord.gg/tpeBPy46hf",
+  homepageURL: "https://bluemarble.lol/",
+  icon: "https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/30256c4535ef239f287a8b09caa5fcdd8161ad5d/dist/assets/Favicon.png",
+  updateURL: "https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble.user.js",
+  downloadURL: "https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble.user.js",
+  match: "https://wplace.live/*"
+};
+const name = window.BM_meta.name;
+const version = window.BM_meta.version;
 const consoleStyle = 'color: cornflowerblue;'; // The styling for the console logs
 
 /** Injects code into the client
@@ -31,6 +46,8 @@ function inject(callback) {
  * @since 0.11.15
  */
 inject(() => {
+  // Export originalFetch to window for use in other modules
+  window.originalFetch = window.fetch;
 
   const script = document.currentScript; // Gets the current script HTML Script Element
   const name = script?.getAttribute('bm-name') || 'Blue Marble'; // Gets the name value that was passed in. Defaults to "Blue Marble" if nothing was found
@@ -158,8 +175,14 @@ inject(() => {
 });
 
 // Imports the CSS file from dist folder on github
-const cssOverlay = GM_getResourceText("CSS-BM-File");
-GM_addStyle(cssOverlay);
+// Load CSS from resource (replace GM_getResourceText)
+fetch("https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/30256c4535ef239f287a8b09caa5fcdd8161ad5d/dist/BlueMarble.user.css")
+  .then(r => r.text())
+  .then(cssOverlay => {
+    const style = document.createElement('style');
+    style.textContent = cssOverlay;
+    document.head.appendChild(style);
+  });
 
 // Imports the Roboto Mono font family
 var stylesheetLink = document.createElement('link');
@@ -181,17 +204,25 @@ const apiManager = new ApiManager(templateManager); // Constructs a new ApiManag
 
 overlayMain.setApiManager(apiManager); // Sets the API manager
 
-const storageTemplates = JSON.parse(GM_getValue('bmTemplates', '{}'));
+const getBMValue = (key, def = '{}') => {
+  let val = localStorage.getItem('BM_' + key);
+  return val === null ? def : val;
+};
+const setBMValue = (key, value) => {
+  localStorage.setItem('BM_' + key, value);
+};
+
+const storageTemplates = JSON.parse(getBMValue('bmTemplates', '{}'));
 console.log(storageTemplates);
 templateManager.importJSON(storageTemplates); // Loads the templates
 
-const userSettings = JSON.parse(GM_getValue('bmUserSettings', '{}')); // Loads the user settings
+const userSettings = JSON.parse(getBMValue('bmUserSettings', '{}'));
 console.log(userSettings);
 console.log(Object.keys(userSettings).length);
 if (Object.keys(userSettings).length == 0) {
   const uuid = crypto.randomUUID(); // Generates a random UUID
   console.log(uuid);
-  GM.setValue('bmUserSettings', JSON.stringify({
+  setBMValue('bmUserSettings', JSON.stringify({
     'uuid': uuid
   }));
 }
@@ -263,7 +294,7 @@ function buildOverlayMain() {
   let isMinimized = false; // Overlay state tracker (false = maximized, true = minimized)
   // Load last saved coordinates (if any)
   let savedCoords = {};
-  try { savedCoords = JSON.parse(GM_getValue('bmCoords', '{}')) || {}; } catch (_) { savedCoords = {}; }
+  try { savedCoords = JSON.parse(getBMValue('bmCoords', '{}')) || {}; } catch (_) { savedCoords = {}; }
   const persistCoords = () => {
     try {
       const tx = Number(document.querySelector('#bm-input-tx')?.value || '');
@@ -271,7 +302,7 @@ function buildOverlayMain() {
       const px = Number(document.querySelector('#bm-input-px')?.value || '');
       const py = Number(document.querySelector('#bm-input-py')?.value || '');
       const data = { tx, ty, px, py };
-      GM.setValue('bmCoords', JSON.stringify(data));
+      setBMValue('bmCoords', JSON.stringify(data));
     } catch (_) {}
   };
   
