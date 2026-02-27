@@ -17,7 +17,8 @@ globalThis.GM_getValue = function(key, defaultValue) {
   try {
     const val = localStorage.getItem(key);
     return val !== null ? val : defaultValue;
-  } catch {
+  } catch (error) {
+    console.warn(error);
     return defaultValue;
   }
 };
@@ -28,7 +29,7 @@ globalThis.GM_deleteValue = function(key) {
 
 globalThis.GM = {
   setValue: async function(key, value) {
-    try { localStorage.setItem(key, String(value)); } catch {}
+    try { localStorage.setItem(key, String(value)); } catch (error) {console.warn(error);}
   },
 
   // Download polyfill: fetch the URL, get a blob, trigger via a temporary <a> tag
