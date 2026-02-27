@@ -2,15 +2,15 @@
  * @since 0.0.0
  */
 
+import './gmPolyfills.js';
 import Observers from './observers.js';
 import ApiManager from './apiManager.js';
 import TemplateManager from './templateManager.js';
 import { consoleLog, consoleWarn } from './utils.js';
 import WindowMain from './WindowMain.js';
-import WindowTelemetry from './WindowTelemetry.js';
 
-const name = GM_info.script.name.toString(); // Name of userscript
-const version = GM_info.script.version.toString(); // Version of userscript
+const name = 'Blue Marble'; // Name of userscript
+const version = __BUILD_VERSION__; // Version of userscript (replaced at build time)
 const consoleStyle = 'color: cornflowerblue;'; // The styling for the console logs
 
 /** Injects code into the client
@@ -158,33 +158,18 @@ inject(() => {
   };
 });
 
-// Imports the CSS file from dist folder on github
-const cssOverlay = GM_getResourceText("CSS-BM-File");
-GM_addStyle(cssOverlay);
+// CSS is injected by the bookmarklet loader as a <style> tag — no action needed here.
 
-// Injection point for the Roboto Mono font file (only if this is the Standalone version)
-const robotoMonoInjectionPoint = 'robotoMonoInjectionPoint';
-
-// If the Roboto Mono injection point contains '@font-face'...
-if (!!(robotoMonoInjectionPoint.indexOf('@font-face') + 1)) {
-  // A very hacky way of doing truthy/falsy logic
-  
-  console.log(`Loading Roboto Mono as a file...`);
-  GM_addStyle(robotoMonoInjectionPoint); // Add the Roboto Mono font-faces that were injected.
-} else {
-  // Else, no Roboto Mono was found. We need to use a stylesheet.
-  
-  // Imports the Roboto Mono font family as a stylesheet
-  var stylesheetLink = document.createElement('link');
-  stylesheetLink.href = 'https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap';
-  stylesheetLink.rel = 'preload';
-  stylesheetLink.as = 'style';
-  stylesheetLink.onload = function () {
-    this.onload = null;
-    this.rel = 'stylesheet';
-  };
-  document.head?.appendChild(stylesheetLink);
-}
+// Imports the Roboto Mono font family as a stylesheet
+var stylesheetLink = document.createElement('link');
+stylesheetLink.href = 'https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap';
+stylesheetLink.rel = 'preload';
+stylesheetLink.as = 'style';
+stylesheetLink.onload = function () {
+  this.onload = null;
+  this.rel = 'stylesheet';
+};
+document.head?.appendChild(stylesheetLink);
 
 // CONSTRUCTORS
 const observers = new Observers(); // Constructs a new Observers object
@@ -197,37 +182,6 @@ windowMain.setApiManager(apiManager); // Sets the API manager
 const storageTemplates = JSON.parse(GM_getValue('bmTemplates', '{}'));
 console.log(storageTemplates);
 templateManager.importJSON(storageTemplates); // Loads the templates
-
-const userSettings = JSON.parse(GM_getValue('bmUserSettings', '{}')); // Loads the user settings
-
-console.log(userSettings);
-console.log(Object.keys(userSettings).length);
-
-// If the user does not have a UUID yet, make a new one.
-if (Object.keys(userSettings).length == 0) {
-  const uuid = crypto.randomUUID(); // Generates a random UUID
-  console.log(uuid);
-  GM.setValue('bmUserSettings', JSON.stringify({
-    'uuid': uuid
-  }));
-}
-
-setInterval(() => apiManager.sendHeartbeat(version), 1000 * 60 * 30); // Sends a heartbeat every 30 minutes
-
-// The current "version" of the data collection agreement
-// Increment by 1 to retrigger the telemetry window
-const currentTelemetryVersion = 1;
-
-// The last "version" of the data collection agreement that the user agreed too
-const previousTelemetryVersion = userSettings?.telemetry;
-console.log(`Telemetry is ${!(previousTelemetryVersion == undefined)}`);
-
-// If the user has not agreed to the current data collection terms, we need to show the Telemetry window.
-if ((previousTelemetryVersion == undefined) || (previousTelemetryVersion > currentTelemetryVersion)) {
-  const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
-  windowTelemetry.setApiManager(apiManager);
-  windowTelemetry.buildWindow(); // Asks the user if they want to enable telemetry
-}
 
 windowMain.buildWindow(); // Builds the main Blue Marble window
 

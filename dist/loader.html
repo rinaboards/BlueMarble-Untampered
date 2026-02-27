@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Blue Marble Loader</title>
+</head>
+<body>
+<script>
+  (async () => {
+    const [js, css] = await Promise.all([
+      fetch('./BlueMarble.user.js').then(r => r.text()),
+      fetch('./BlueMarble.user.css').then(r => r.text())
+    ]);
+
+    // Send JS to parent; bookmarklet will inject it then ACK with an empty message
+    window.parent.postMessage(js, '*');
+
+    // Wait for the ACK from the bookmarklet
+    await new Promise(resolve => window.addEventListener('message', resolve, { once: true }));
+
+    // Send CSS to parent; bookmarklet will inject it and remove this iframe
+    window.parent.postMessage(css, '*');
+  })();
+</script>
+</body>
+</html>

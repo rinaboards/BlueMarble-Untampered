@@ -3,8 +3,9 @@
  * 1. Update the package version across the entire project
  * 2. Bundle the JS files into one file (esbuild)
  * 3. Bundle the CSS files into one file (esbuild)
- * 4. Compress & obfuscate the bundled JS file (terner)
- * 5. Runs the CSS selector mangler (cssMandler.js)
+ * 4. Compress & obfuscate the bundled JS file (terser)
+ * 5. Run the CSS selector mangler (cssMangler.js)
+ * 6. Copy loader.html to dist/
  * @since 0.0.6
 */
 
@@ -20,23 +21,13 @@ const require = createRequire(import.meta.url);
 // CommonJS imports (require)
 const terser = require('terser');
 
-const isGitHub = !!process.env?.GITHUB_ACTIONS; // Is this running in a GitHub Action Workflow?'
+const isGitHub = !!process.env?.GITHUB_ACTIONS; // Is this running in a GitHub Action Workflow?
+
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
 
 console.log(`${consoleStyle.BLUE}Starting build...${consoleStyle.RESET}`);
 
-// Tries to build the wiki if build.js is run in a GitHub Workflow
-// if (isGitHub) {
-//   try {
-//     console.log(`Generating JSDoc...`);
-//     execSync(`npx jsdoc src/ -r -d docs -t node_modules/minami`, { stdio: "inherit" });
-//     console.log(`JSDoc built ${consoleStyle.GREEN}successfully${consoleStyle.RESET}`);
-//   } catch (error) {
-//     console.error(`${consoleStyle.RED + consoleStyle.BOLD}Failed to generate JSDoc${consoleStyle.RESET}:`, error);
-//     process.exit(1);
-//   }
-// }
-
-console.log(`${consoleStyle.BLUE}Building 1 of 3...${consoleStyle.RESET}`);
+console.log(`${consoleStyle.BLUE}Building 1 of 2...${consoleStyle.RESET}`);
 
 // Tries to bump the version
 try {
@@ -46,9 +37,6 @@ try {
   console.error(`${consoleStyle.RED + consoleStyle.BOLD}Failed to update version number${consoleStyle.RESET}:`, error);
   process.exit(1);
 }
-
-// Fetches the userscript metadata banner
-const metaContent = fs.readFileSync('src/BlueMarble.meta.js', 'utf8');
 
 // Generates a new CSS file that imports all other CSS files inside the `src/` folder
 const mainCSSText = fs.readdirSync('src/')
@@ -79,6 +67,9 @@ const resultEsbuild = await esbuild.build({
   legalComments: 'inline', // What level of legal comments are preserved? (Hard: none, Soft: inline)
   minify: false, // Should the code be minified?
   write: false, // Should we write the outfile to the disk?
+  define: {
+    '__BUILD_VERSION__': JSON.stringify(pkg.version) // Injected into gmPolyfills.js and main.js
+  }
 }).catch(() => process.exit(1));
 
 // Retrieves the JS file
@@ -139,77 +130,10 @@ if (mapCSS) {
   fs.writeFileSync('dist/BlueMarble.user.css.map.json', JSON.stringify(mapCSS, null, 2));
 }
 
-// Adds the banner
-fs.writeFileSync(
-  'dist/BlueMarble.user.js', 
-  metaContent + fs.readFileSync('dist/BlueMarble.user.js', 'utf8'), 
-  'utf8'
-);
+console.log(`${consoleStyle.BLUE}Building 2 of 2...${consoleStyle.RESET}`);
 
-console.log(`${consoleStyle.BLUE}Building 2 of 3...${consoleStyle.RESET}`);
-
-const standaloneName = 'BlueMarble-Standalone'; // Standalone flavor name of flie
-const standaloneBMUpdateURL = `https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/${standaloneName}.user.js`;
-
-// Fetches the completed, main Blue Marble userscript files
-const mainBMjs = fs.readFileSync('dist/BlueMarble.user.js', 'utf8');
-let mainBMcss = fs.readFileSync('dist/BlueMarble.user.css', 'utf8');
-
-// Removes new lines from the CSS file
-mainBMcss = mainBMcss.replace(/\r?\n/g, '').trim();
-
-// Injects the CSS into the Blue Marble JavaScript
-let standaloneBMjs = mainBMjs.replace('GM_getResourceText("CSS-BM-File")', `\`${mainBMcss}\``);
-
-// Removes the metadata in the header that points to the old CSS location
-standaloneBMjs = standaloneBMjs.replace(/\/\/\s+\@resource\s+CSS-BM-File.*\r?\n?/g, '');
-
-// Obtains the Roboto Mono font to inject
-const robotoMonoLatin = fs.readFileSync('build/assets/RobotoMonoLatin.woff2');
-const robotoMonoLatinBase64 = robotoMonoLatin.toString('base64');
-const fontfaces = `@font-face{font-family:'Roboto Mono';font-style:normal;font-weight:400;src:url(data:font/woff2;base64,${robotoMonoLatinBase64})format('woff2');}`;
-
-// Injects Roboto Mono into the JavaScript file
-standaloneBMjs = standaloneBMjs.replace(/robotoMonoInjectionPoint[^'"]*/g, fontfaces);
-
-// Obtains the Favicon to inject
-const favicon = fs.readFileSync('dist/assets/Favicon.png');
-const faviconBase64DataURI = `data:image/png;base64,${favicon.toString('base64')}`;
-
-// Replaces the 2 different types of icon requests with base64
-standaloneBMjs = standaloneBMjs.replace(/\/\/\s+\@icon\s+https.*\r?\n?/g, `// @icon64          ${faviconBase64DataURI}\n`);
-standaloneBMjs = standaloneBMjs.replace(/https[^'"]+dist\/assets\/Favicon\.png[^'"]*/gi, faviconBase64DataURI);
-
-// Updates the update/download URLs
-standaloneBMjs = standaloneBMjs.replace(/\/\/\s+\@updateURL\s+https.*\r?\n?/g, `// @updateURL       ${standaloneBMUpdateURL}\n`);
-standaloneBMjs = standaloneBMjs.replace(/\/\/\s+\@downloadURL\s+https.*\r?\n?/g, `// @downloadURL     ${standaloneBMUpdateURL}\n`);
-
-// Generates the Blue Marble JS file that contains all external resources
-fs.writeFileSync(`dist/${standaloneName}.user.js`, standaloneBMjs, 'utf-8');
-
-console.log(`${consoleStyle.BLUE}Building 3 of 3...${consoleStyle.RESET}`);
-
-const greasyForkName = 'BlueMarble-For-GreasyFork'; // GreasyFork flavor name of file
-const greasyForkUpdateURL = `https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/${greasyForkName}.user.js`;
-
-let greasyForkBMjs = metaContent + resultEsbuildJS.text; // Gets the unobfuscated code and adds the metadata banner
-
-// Updates the name of the CSS location
-greasyForkBMjs = greasyForkBMjs.replace(/(.*\/\/\s+\@resource\s+CSS-BM-File.*)(BlueMarble\.user\.css)(.*)/gi, `$1${greasyForkName}.user.css$3`);
-// Don't use the multiline flag or everything will break!
-
-// Updates the update/download URLs
-greasyForkBMjs = greasyForkBMjs.replace(/\/\/\s+\@updateURL\s+https.*\r?\n?/g, `// @updateURL       ${greasyForkUpdateURL}\n`);
-greasyForkBMjs = greasyForkBMjs.replace(/\/\/\s+\@downloadURL\s+https.*\r?\n?/g, `// @downloadURL     ${greasyForkUpdateURL}\n`);
-
-// Bundles the CSS files without minification
-esbuild.build({
-  entryPoints: ['src/main.css'],
-  bundle: true,
-  outfile: `dist/${greasyForkName}.user.css`,
-  minify: false
-});
-
-fs.writeFileSync(`dist/${greasyForkName}.user.js`, greasyForkBMjs, 'utf-8');
+// Copy loader.html to dist/
+fs.copyFileSync('build/loader.html', 'dist/loader.html');
+console.log(`Copied loader.html to dist/ ${consoleStyle.GREEN}successfully${consoleStyle.RESET}`);
 
 console.log(`${consoleStyle.GREEN + consoleStyle.BOLD + consoleStyle.UNDERLINE}Building complete!${consoleStyle.RESET}`);

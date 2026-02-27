@@ -3,8 +3,8 @@
  * @since 0.88.358
 */
 
-@import './confettiManager.css';
-@import './overlay.css';
 @import './WindowFilter.css';
 @import './WindowMain.css';
 @import './WindowWizard.css';
+@import './confettiManager.css';
+@import './overlay.css';
